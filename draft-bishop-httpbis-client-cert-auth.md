@@ -19,35 +19,34 @@
 # Change the file extension to match the format (.xml for XML, etc...)
 #
 ###
-title: "TODO - Your title"
-abbrev: "TODO - Abbreviation"
-category: info
+title: "Client Certificate Authentication in HTTP"
+abbrev: "Client Cert Auth"
+category: std
 
-docname: draft-todo-yourname-protocol-latest
+docname: draft-bishop-httpbis-client-cert-auth
 submissiontype: IETF  # also: "independent", "editorial", "IAB", or "IRTF"
 number:
 date:
 consensus: true
 v: 3
-area: AREA
-workgroup: WG Working Group
+area: WIT
+workgroup: HTTP Working Group
 keyword:
- - next generation
- - unicorn
- - sparkling distributed ledger
+ - client certificate
+ - http authentication
+ - exported authenticator
 venue:
-  group: WG
+  group: HTTP
   type: Working Group
-  mail: WG@example.com
-  arch: https://example.com/WG
-  github: USER/REPO
-  latest: https://example.com/LATEST
+  mail: ietf-http-wg@w3.org
+  github: MikeBishop/client-cert-auth
+  #latest: https://example.com/LATEST
 
 author:
  -
-    fullname: Your Name Here
-    organization: Your Organization Here
-    email: your.email@example.com
+    fullname: Mike Bishop
+    organization: Akamai Technologies
+    email: mbishop@evequefou.be
 
 normative:
 
