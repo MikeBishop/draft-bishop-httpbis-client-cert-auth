@@ -9,18 +9,18 @@ number:
 date:
 consensus: true
 v: 3
-area: WIT
-workgroup: HTTP Working Group
+area: "Applications and Real-Time"
+workgroup: "HTTP"
 keyword:
  - client certificate
  - http authentication
  - exported authenticator
 venue:
-  group: HTTP
-  type: Working Group
-  mail: ietf-http-wg@w3.org
-  github: MikeBishop/client-cert-auth
-  #latest: https://example.com/LATEST
+  group: "HTTP"
+  type: "Working Group"
+  mail: "ietf-http-wg@w3.org"
+  github: "MikeBishop/client-cert-auth"
+  latest: "https://MikeBishop.github.io/client-cert-auth/draft-bishop-httpbis-client-cert-auth.html"
 
 author:
  -
