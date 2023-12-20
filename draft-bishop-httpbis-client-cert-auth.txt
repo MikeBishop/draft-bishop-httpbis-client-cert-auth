@@ -1,0 +1,385 @@
+
+
+
+
+HTTP                                                           M. Bishop
+Internet-Draft                                       Akamai Technologies
+Intended status: Standards Track                        20 December 2023
+Expires: 22 June 2024
+
+
+               Client Certificate Authentication in HTTP
+              draft-bishop-httpbis-client-cert-auth-latest
+
+Abstract
+
+   A use of TLS Exported Authenticators is described which enables HTTP
+   servers to request and HTTP clients to offer certificate-based
+   credentials after the connection is established.  The means by which
+   these credentials are used with requests is defined.
+
+About This Document
+
+   This note is to be removed before publishing as an RFC.
+
+   The latest revision of this draft can be found at
+   https://MikeBishop.github.io/client-cert-auth/draft-bishop-httpbis-
+   client-cert-auth.html.  Status information for this document may be
+   found at https://datatracker.ietf.org/doc/draft-bishop-httpbis-
+   client-cert-auth/.
+
+   Discussion of this document takes place on the HTTP Working Group
+   mailing list (mailto:ietf-http-wg@w3.org).
+
+   Source for this draft and an issue tracker can be found at
+   https://github.com/MikeBishop/client-cert-auth.
+
+Status of This Memo
+
+   This Internet-Draft is submitted in full conformance with the
+   provisions of BCP 78 and BCP 79.
+
+   Internet-Drafts are working documents of the Internet Engineering
+   Task Force (IETF).  Note that other groups may also distribute
+   working documents as Internet-Drafts.  The list of current Internet-
+   Drafts is at https://datatracker.ietf.org/drafts/current/.
+
+   Internet-Drafts are draft documents valid for a maximum of six months
+   and may be updated, replaced, or obsoleted by other documents at any
+   time.  It is inappropriate to use Internet-Drafts as reference
+   material or to cite them other than as "work in progress."
+
+   This Internet-Draft will expire on 22 June 2024.
+
+Copyright Notice
+
+   Copyright (c) 2023 IETF Trust and the persons identified as the
+   document authors.  All rights reserved.
+
+   This document is subject to BCP 78 and the IETF Trust's Legal
+   Provisions Relating to IETF Documents (https://trustee.ietf.org/
+   license-info) in effect on the date of publication of this document.
+   Please review these documents carefully, as they describe your rights
+   and restrictions with respect to this document.  Code Components
+   extracted from this document must include Revised BSD License text as
+   described in Section 4.e of the Trust Legal Provisions and are
+   provided without warranty as described in the Revised BSD License.
+
+Table of Contents
+
+   1.  Introduction
+     1.1.  TLS Exported Authenticators
+     1.2.  Conventions and Definitions
+   2.  The ExportedAuthenticator Authentication Scheme
+     2.1.  Challenge
+     2.2.  Response
+     2.3.  Validation
+   3.  Security Considerations
+     3.1.  Impersonation
+     3.2.  Denial of Service
+     3.3.  Confusion about State
+   4.  IANA Considerations
+   5.  References
+     5.1.  Normative References
+     5.2.  Informative References
+   Acknowledgments
+   Author's Address
+
+1.  Introduction
+
+   Many HTTP [HTTP] servers have authentication requirements for the
+   resources they serve.  Using client certificates for authentication
+   presents a unique challenge because of the interaction with the
+   underlying TLS layer.
+
+   Servers that use client certificates to authenticate users might
+   request client authentication during or immediately after the TLS
+   handshake.  However, if not all users or resources need certificate-
+   based authentication, a request for a certificate has the unfortunate
+   consequence of triggering the client to seek a certificate, possibly
+   requiring user interaction, network traffic, or other time-consuming
+   activities.  During this time, the connection is stalled in many
+   implementations.  Such a request can result in a poor experience,
+   particularly when sent to a client that does not expect the request.
+
+   The TLS 1.3 CertificateRequest can be used by servers to give clients
+   hints about which certificate to offer.  Servers that rely on
+   certificate-based authentication might request different certificates
+   for different resources.  Such a server cannot use contextual
+   information about the resource to construct an appropriate TLS
+   CertificateRequest message during the initial handshake.
+
+   Consequently, client certificates are requested at connection
+   establishment time only in cases where all clients are expected or
+   required to have a single certificate that is used for all resources.
+   Many forms of HTTP authentication are reactive, that is, credentials
+   are requested in response to the client making a request.
+
+   TLS 1.2 [TLS12] enabled this by permitting the server to request a
+   new TLS handshake, in which the server will request the client's
+   certificate.  While this works for HTTP/1.1, HTTP/2 [HTTP2] prohibits
+   renegotiation after any application data has been sent.  This
+   completely blocks reactive certificate authentication in HTTP/2 using
+   TLS 1.2.
+
+   TLS 1.3 [TLS] introduces a new client authentication mechanism that
+   allows for clients to authenticate after the handshake has been
+   completed.  For the purposes of authenticating an HTTP request, this
+   is functionally equivalent to renegotiation.  Unfortunately, many TLS
+   stacks do not support post-handshake authentication, so servers
+   cannot assume its availability at all clients.
+
+   In addition, an important part of the HTTP/1.1 exchange is that the
+   client is able to easily identify the request that caused the TLS
+   renegotiation.  The client is able to assume that the next unanswered
+   request on the connection is responsible.  The HTTP stack in the
+   client is then able to direct the certificate request to the
+   application or component that initiated that request.  This ensures
+   that the application has the right contextual information for
+   processing the request.
+
+   In newer mappings of HTTP, a client can have multiple outstanding
+   requests.  Without some sort of correlation information, a client is
+   unable to identify which request caused the server to request a
+   certificate.  An exchange purely at the TLS layer is unable to
+   provide such information using existing mechanisms.
+
+1.1.  TLS Exported Authenticators
+
+   Exported Authenticators [ExpAuth] provide a way to authenticate one
+   party of a TLS connection to its peer using authentication messages
+   created after the session has been established.  This allows the
+   client to prove ownership of additional identities at any time after
+   the handshake has completed.  This proof of authentication can be
+   exported and transmitted as part of an application-layer protocol,
+   but is bound to the TLS connection within which it was generated.
+
+   [ExpAuth] defines multiple modes for using an exported authenticator.
+   In the "Client Authentication" mode, the server generates an
+   authenticator request which encodes an unpredictable request_context
+   and a description of the desired credential.  The client responds by
+   generating an authenticator containing the requested credential,
+   which the server is able to validate.
+
+   If the exchange is successful, the server has the same level of
+   assurance of the client's identity as if the certificate had been
+   requested and provided in the TLS handshake.
+
+1.2.  Conventions and Definitions
+
+   The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL NOT",
+   "SHOULD", "SHOULD NOT", "RECOMMENDED", "NOT RECOMMENDED", "MAY", and
+   "OPTIONAL" in this document are to be interpreted as described in
+   BCP 14 [RFC2119] [RFC8174] when, and only when, they appear in all
+   capitals, as shown here.
+
+2.  The ExportedAuthenticator Authentication Scheme
+
+   This document defines the "ExportedAuthenticator" HTTP authentication
+   scheme.  User agents possess an X.509 certificate type as defined in
+   [TLS].  Alternative certificate formats (such as Raw Public Keys as
+   described in [RFC7250]) are not supported in this version of the
+   specification and their use in this context has not yet been
+   analyzed.
+
+   All authentication parameters are encoded using base64url (see
+   Section 5 of [BASE64]) without quotes and without padding.  In other
+   words, these byte sequence authentication parameters values MUST NOT
+   include any characters other then ASCII letters, digits, dash and
+   underscore.
+
+2.1.  Challenge
+
+   As described in Section 11.3 of [HTTP], a 401 (Unauthorized) or 407
+   (Proxy Authentication Required) response message is used by an origin
+   server or proxy respectively to challenge the authorization of a user
+   agent.  Such a response includes a WWW-Authenticate or Proxy-
+   Authenticate header field containing at least one challenge
+   applicable to the requested resource.
+
+   A server or proxy which will accept exported authenticators as a
+   valid authentication type includes a challenge with the scheme
+   "ExportedAuthenticator" and a single authentication parameter "req"
+   containing an authenticator request produced by calling the "request"
+   API described in Section 7.1 of [ExpAuth], encoded using base64url.
+
+   The certificate_request_context used in generating the request MUST
+   uniquely identify the set of extensions requested from the client and
+   MUST contain additional random input which cannot be predicted by the
+   client.  A server MAY reuse the resulting challenge multiple times in
+   response to multiple requests arriving over a short period of time,
+   but MUST NOT continue to use the same context value over a long
+   period of time.
+
+2.2.  Response
+
+   After receiving a challenge in response to a request, a client that
+   wishes to authenticate itself can include an Authorization or Proxy-
+   Authorization header field in a subsequent request.
+
+   The client passes the desired identity and the authenticator request
+   generated by the server to the "authenticate" API described in
+   Section 7.3 of [ExpAuth].  The client then constructs an
+   Authentication or Proxy-Authentication header field with the scheme
+   "ExportedAuthenticator" and a single authentication parameter "ea"
+   containing the resulting authenticator, encoded using base64url.
+
+   Where a client has previously generated an authenticator for a given
+   certificate_request_context, it MAY remember and reuse the resulting
+   authenticator in subsequent requests.
+
+2.3.  Validation
+
+   When a server receives a request containing an Authorization or
+   Proxy-Authorization header field, it takes the following steps to
+   determine the client's identity:
+
+   *  The certificate_request_context is extracted from the
+      authenticator using the "get context" API described in Section 7.2
+      of [ExpAuth].
+
+      -  If the context was generated by the server and is still valid:
+
+         o  If the context has not previously been authenticated to by
+            the client, proceed with validating the exported
+            authenticator.
+
+         o  If the context has previously been authenticated to by the
+            client, the server checks that the provided authenticator
+            matches that previously provided by the client.  If so, the
+            server reuses the result of the previous authentication.
+
+      -  Otherwise, this header field should be ignored and the request
+         processed as if it contained no authentication information;
+         this likely results in a 401/407 response with a fresh
+         challenge.
+
+   *  The authenticator is passed to the "validate" API described in
+      Section 7.4 of [ExpAuth].
+
+      -  If validation is successful, a client identity is returned.
+         The response is generated as appropriate for this identity
+         (i.e. 200, 403, etc.).
+
+      -  If validation fails or results in an empty identity, the
+         request is processed as if it contained no authentication
+         information; this likely results in a 401/407 response with a
+         fresh challenge.
+
+   Because the selection of appropriate credentials might require human
+   interaction or access to remote cryptographic resources, servers
+   SHOULD continue to accept authenticators for a given context for some
+   time after it stops using that context in challenges.  This period
+   SHOULD be on the order of 1-2 minutes, but MAY be extended if the
+   client continues to make requests with an identical authenticator.
+
+3.  Security Considerations
+
+   This mechanism defines an alternate way to obtain client certificates
+   other than in the initial TLS handshake.  While the signature of
+   exported authenticator values is expected to be equally secure, it is
+   important to recognize that a vulnerability in this code path is at
+   least equal to a vulnerability in the TLS handshake.
+
+3.1.  Impersonation
+
+   If the certificate request context is predictable or stable, an
+   attacker with brief access to the client's private key and connection
+   state can pre-generate an authenticator that will be valid later in
+   the connection.  In order to guard against this, servers SHOULD NOT
+   reuse the same context in challenges over a period longer than 60
+   seconds and MAY reject authenticators from contexts last used for a
+   challenge or request more than 5 minutes ago.
+
+3.2.  Denial of Service
+
+   If a server does not reuse authenticator request contexts across
+   challenges, the requirement to remember the contexts can be used to
+   consume memory on the server through repeated unauthenticated
+   requests.  Servers SHOULD reuse contexts to limit memory consumption
+   and aggressively drop old contexts which have not been successfully
+   used for authenticated requests.
+
+   Servers MAY implement context reuse by a consistent mechanism of
+   constructing the context ID, such as a truncated hash of a local
+   connection identifier unknown to the client and the current time.
+   Using this mechanism, servers need only remember contexts which have
+   been used for successful authentication, but would need to
+   reconstruct multiple potential contexts when validating a client's
+   authenticator.
+
+3.3.  Confusion about State
+
+   Servers MUST NOT consider previously authenticated client identities
+   as applying to all subsequent requests made by the client.  Clients
+   might choose to present different credentials on different requests.
+
+4.  IANA Considerations
+
+   This document, if approved, requests IANA to register the following
+   entry in the "HTTP Authentication Schemes" registry maintained at
+   https://www.iana.org/assignments/http-authschemes
+   (https://www.iana.org/assignments/http-authschemes).
+
+   Authentication Scheme Name:  ExportedAuthenticator
+
+   Reference:  This document
+
+   Notes:  None
+
+5.  References
+
+5.1.  Normative References
+
+   [BASE64]   Josefsson, S., "The Base16, Base32, and Base64 Data
+              Encodings", RFC 4648, DOI 10.17487/RFC4648, October 2006,
+              <https://www.rfc-editor.org/rfc/rfc4648>.
+
+   [ExpAuth]  Sullivan, N., "Exported Authenticators in TLS", RFC 9261,
+              DOI 10.17487/RFC9261, July 2022,
+              <https://www.rfc-editor.org/rfc/rfc9261>.
+
+   [HTTP]     Fielding, R., Ed., Nottingham, M., Ed., and J. Reschke,
+              Ed., "HTTP Semantics", STD 97, RFC 9110,
+              DOI 10.17487/RFC9110, June 2022,
+              <https://www.rfc-editor.org/rfc/rfc9110>.
+
+   [RFC2119]  Bradner, S., "Key words for use in RFCs to Indicate
+              Requirement Levels", BCP 14, RFC 2119,
+              DOI 10.17487/RFC2119, March 1997,
+              <https://www.rfc-editor.org/rfc/rfc2119>.
+
+   [RFC8174]  Leiba, B., "Ambiguity of Uppercase vs Lowercase in RFC
+              2119 Key Words", BCP 14, RFC 8174, DOI 10.17487/RFC8174,
+              May 2017, <https://www.rfc-editor.org/rfc/rfc8174>.
+
+   [TLS]      Rescorla, E., "The Transport Layer Security (TLS) Protocol
+              Version 1.3", RFC 8446, DOI 10.17487/RFC8446, August 2018,
+              <https://www.rfc-editor.org/rfc/rfc8446>.
+
+5.2.  Informative References
+
+   [HTTP2]    Thomson, M., Ed. and C. Benfield, Ed., "HTTP/2", RFC 9113,
+              DOI 10.17487/RFC9113, June 2022,
+              <https://www.rfc-editor.org/rfc/rfc9113>.
+
+   [RFC7250]  Wouters, P., Ed., Tschofenig, H., Ed., Gilmore, J.,
+              Weiler, S., and T. Kivinen, "Using Raw Public Keys in
+              Transport Layer Security (TLS) and Datagram Transport
+              Layer Security (DTLS)", RFC 7250, DOI 10.17487/RFC7250,
+              June 2014, <https://www.rfc-editor.org/rfc/rfc7250>.
+
+   [TLS12]    Dierks, T. and E. Rescorla, "The Transport Layer Security
+              (TLS) Protocol Version 1.2", RFC 5246,
+              DOI 10.17487/RFC5246, August 2008,
+              <https://www.rfc-editor.org/rfc/rfc5246>.
+
+Acknowledgments
+
+   TODO acknowledge.
+
+Author's Address
+
+   Mike Bishop
+   Akamai Technologies
+   Email: mbishop@evequefou.be
